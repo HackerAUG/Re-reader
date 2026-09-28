@@ -64,20 +64,27 @@
         const WS_URL = "wss://re-reader.onrender.com";
         const token = localStorage.getItem('token');
 
+        if (!token) {
+            window.location.href = 'index.html';
+        }
+
         let isAdmin = false;
         let isMod = false;
 
-        if (token) {
-            try {
-                const payload = JSON.parse(atob(token.split('.')[1]));
-                console.log("Token payload:", payload);
-                
-                // Read boolean database flags safely with fallbacks
-                isAdmin = payload.isAdmin === true || payload.is_admin === true || payload.role === 'admin';
-                isMod = payload.ismod === true || payload.is_mod === true || payload.role === 'mod';
-            } catch(e) {
-                console.error("Token parse error", e);
-            }
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            console.log("Token payload:", payload);
+            
+            // Read database flags from token payload safely
+            isAdmin = payload.isAdmin === true || payload.is_admin === true || payload.role === 'admin';
+            isMod = payload.ismod === true || payload.is_mod === true || payload.role === 'mod';
+
+            // EMERGENCY BYPASS: If your token payload doesn't include the flag yet, 
+            // put your exact username inside the quotes below to force admin access for testing:
+            // if (payload.username === 'YOUR_USERNAME') { isAdmin = true; }
+
+        } catch(e) {
+            console.error("Token parse error", e);
         }
 
         if (isAdmin || isMod) {
