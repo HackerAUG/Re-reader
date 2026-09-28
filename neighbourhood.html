@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Neighborhood - Re-reader</title>
+    <title>Neighborhood - Unreader</title>
     <style>
         body { font-family: monospace; background: #fff; color: #000; margin: 0; padding: 20px; line-height: 1.4; }
         .container { max-width: 600px; margin: 0 auto; border: 2px solid #000; padding: 20px; }
@@ -10,9 +10,11 @@
         .nav-links { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
         .nav-links a { border: 2px solid #000; padding: 8px 12px; text-decoration: none; color: #000; font-weight: bold; background: #eee; }
         .nav-links a:hover { background: #000; color: #fff; }
-        .post-card { border: 1px solid #000; padding: 10px; margin-bottom: 15px; background: #f9f9f9; }
-        input, textarea, button { font-family: monospace; font-size: 16px; padding: 8px; margin: 5px 0; width: 100%; box-sizing: border-box; border: 2px solid #000; background: #fff; }
+        .post-box { border: 2px solid #000; padding: 12px; margin-bottom: 15px; background: #f9f9f9; }
+        .post { border: 1px solid #000; padding: 10px; margin-bottom: 10px; background: #fff; }
+        textarea, button { font-family: monospace; font-size: 16px; padding: 8px; margin: 5px 0; width: 100%; box-sizing: border-box; border: 2px solid #000; background: #fff; }
         button { background: #000; color: #fff; font-weight: bold; cursor: pointer; }
+        button:hover { background: #fff; color: #000; }
     </style>
 </head>
 <body>
@@ -23,86 +25,69 @@
             <a href="chat.html">Public Chat</a>
             <a href="topics.html">Topics</a>
             <a href="neighbourhood.html">Neighborhood</a>
+            <a href="mod.html" id="modLink" style="display:none;">Mod Panel</a>
         </div>
 
-        <div style="border: 2px solid #000; padding: 10px; margin-bottom: 15px;">
-            <h3>New Neighborhood Note</h3>
-            <input type="text" id="postTitle" placeholder="Title...">
-            <textarea id="postContent" placeholder="Write your post..." rows="3"></textarea>
-            <button onclick="createPost()">Broadcast Note</button>
+        <div class="post-box">
+            <h3>Broadcast to Neighborhood</h3>
+            <textarea id="postContent" placeholder="What's happening in your local network?..." rows="3"></textarea>
+            <button onclick="sendNeighborhoodPost()">Post Update</button>
         </div>
 
-        <div id="neighborhoodFeed">Loading neighborhood feed...</div>
+        <div id="feedList">Loading neighborhood feed...</div>
     </div>
 
     <script>
         const API_URL = "https://re-reader.onrender.com";
         const WS_URL = "wss://re-reader.onrender.com";
         const token = localStorage.getItem('token');
-        if (!token) {
-            alert('Please login first via the Dashboard.');
-            window.location.href = 'index.html';
-        }
+        if (!token) { window.location.href = 'index.html'; }
+
+        // Check user role from token to show mod panel link if applicable
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            if (payload.role === 'admin' || payload.role === 'mod') {
+                document.getElementById('modLink').style.display = 'inline-block';
+            }
+        } catch(e) {}
 
         let ws;
-
-        async function loadFeed() {
-            try {
-                const res = await fetch(`${API_URL}/neighborhood-history?index=0`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const data = await res.json();
-                renderFeed(data);
-            } catch (err) {
-                document.getElementById('neighborhoodFeed').innerHTML = 'Failed to load neighborhood history.';
-            }
+        function initWebSocket() {
+            ws = new WebSocket(WS_URL);
+            ws.onopen = () => ws.send(JSON.stringify({ type: 'auth', token: token }));
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type === 'neighborhood_update') renderFeed(data.posts);
+            };
+            ws.onclose = () => setTimeout(initWebSocket, 3000);
         }
 
-        function renderFeed(posts) {
-            const container = document.getElementById('neighborhoodFeed');
+        async function renderFeed(posts) {
+            const container = document.getElementById('feedList');
             container.innerHTML = '';
-            if (posts.length === 0) {
-                container.innerHTML = '<p>No neighborhood posts yet.</p>';
+            if (!posts || posts.length === 0) {
+                container.innerHTML = '<p>No local posts yet.</p>';
                 return;
             }
             posts.forEach(p => {
-                if (p.is_deleted) return;
                 const div = document.createElement('div');
-                div.className = 'post-card';
-                div.innerHTML = `<h3>${p.title}</h3><p>${p.content}</p><p><small>Posted by @${p.username}</small></p>`;
+                div.className = 'post';
+                div.innerHTML = `<strong>@${p.username}</strong><p>${p.content}</p><small>${new Date(p.created_at).toLocaleString()}</small>`;
                 container.appendChild(div);
             });
         }
 
-        function initWebSocket() {
-            ws = new WebSocket(WS_URL);
-            ws.onopen = () => {
-                ws.send(JSON.stringify({ type: 'auth', token: token }));
-                ws.send(JSON.stringify({ type: 'switch_context', mode: 'neighborhood', target: '' }));
-            };
-            ws.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                if (data.type === 'refresh_feed') {
-                    loadFeed();
-                }
-            };
-            ws.onclose = () => { setTimeout(initWebSocket, 3000); };
-        }
-
-        function createPost() {
-            const title = document.getElementById('postTitle').value.trim();
+        function sendNeighborhoodPost() {
             const content = document.getElementById('postContent').value.trim();
-            if (!title || !content) return;
+            if (!content) return;
             if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: 'neighborhood_post', title: title, content: content }));
-                document.getElementById('postTitle').value = '';
+                ws.send(JSON.stringify({ type: 'neighborhood_post', content: content }));
                 document.getElementById('postContent').value = '';
             } else {
-                alert('WebSocket disconnected.');
+                alert('WebSocket offline.');
             }
         }
 
-        loadFeed();
         initWebSocket();
     </script>
 </body>
