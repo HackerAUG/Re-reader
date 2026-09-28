@@ -2,7 +2,7 @@
   "name": "kindle-eink-chat",
   "version": "1.0.0",
   "description": "E-ink optimized multi-page social app for low-JS browsers",
-  "main": "server.js",
+  "main": "index.js",
   "type": "module",
   "scripts": {
     "start": "node index.js"
