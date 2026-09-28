@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Topics - Unreader</title>
+    <style>
+        body { font-family: monospace; background: #fff; color: #000; margin: 0; padding: 20px; line-height: 1.4; }
+        .container { max-width: 600px; margin: 0 auto; border: 2px solid #000; padding: 20px; }
+        h1 { border-bottom: 2px solid #000; padding-bottom: 5px; margin-top: 0; }
+        .nav-links { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .nav-links a { border: 2px solid #000; padding: 8px 12px; text-decoration: none; color: #000; font-weight: bold; background: #eee; }
+        .nav-links a:hover { background: #000; color: #fff; }
+        .topic-card { border: 1px solid #000; padding: 10px; margin-bottom: 10px; background: #f9f9f9; }
+        input, button { font-family: monospace; font-size: 16px; padding: 8px; margin: 5px 0; width: 100%; box-sizing: border-box; border: 2px solid #000; background: #fff; }
+        button { background: #000; color: #fff; font-weight: bold; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>DISCUSSION TOPICS</h1>
+        <div class="nav-links">
+            <a href="index.html">Dashboard</a>
+            <a href="chat.html">Public Chat</a>
+            <a href="topics.html">Topics</a>
+            <a href="neighbourhood.html">Neighborhood</a>
+        </div>
+
+        <div style="border: 2px solid #000; padding: 10px; margin-bottom: 15px;">
+            <h3>Create New Topic</h3>
+            <input type="text" id="topicTitle" placeholder="Topic Title...">
+            <button onclick="createTopic()">Publish Topic</button>
+        </div>
+
+        <div id="topicsList">Loading topics...</div>
+    </div>
+
+    <script>
+        const WS_URL = "wss://re-reader.onrender.com";
+        const token = localStorage.getItem('token');
+        if (!token) {
+            alert('Please login first via the Dashboard.');
+            window.location.href = 'index.html';
+        }
+
+        let ws;
+
+        function initWebSocket() {
+            ws = new WebSocket(WS_URL);
+            ws.onopen = () => {
+                ws.send(JSON.stringify({ type: 'auth', token: token }));
+            };
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type === 'topics_update') {
+                    renderTopics(data.topics);
+                }
+            };
+            ws.onclose = () => { setTimeout(initWebSocket, 3000); };
+        }
+
+        function renderTopics(topics) {
+            const container = document.getElementById('topicsList');
+            container.innerHTML = '';
+            if (topics.length === 0) {
+                container.innerHTML = '<p>No topics found.</p>';
+                return;
+            }
+            topics.forEach(t => {
+                const div = document.createElement('div');
+                div.className = 'topic-card';
+                div.innerHTML = `<h3>${t.title}</h3><p><small>Created by @${t.username}</small></p>`;
+                container.appendChild(div);
+            });
+        }
+
+        function createTopic() {
+            const titleInput = document.getElementById('topicTitle');
+            const title = titleInput.value.trim();
+            if (!title) return;
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'create_topic', title: title }));
+                titleInput.value = '';
+            } else {
+                alert('WebSocket connection offline.');
+            }
+        }
+
+        initWebSocket();
+    </script>
+</body>
+</html>
