@@ -15,6 +15,7 @@
         button { background: #000; color: #fff; font-weight: bold; cursor: pointer; }
         button:hover { background: #fff; color: #000; }
         .hidden { display: none !important; }
+        #errorMsg { color: red; font-weight: bold; margin-top: 5px; }
     </style>
 </head>
 <body>
@@ -41,6 +42,7 @@
                 <input type="text" id="loginUsername" placeholder="Username...">
                 <input type="password" id="loginPassword" placeholder="Password...">
                 <button onclick="loginUser()">Login</button>
+                <div id="errorMsg"></div>
             </div>
             <div id="logoutView" class="hidden">
                 <button onclick="logoutUser()">Log Out</button>
@@ -49,6 +51,7 @@
     </div>
 
     <script>
+        // Make sure this matches your exact Render backend URL
         const API_URL = "https://re-reader.onrender.com";
         const token = localStorage.getItem('token');
         
@@ -71,7 +74,7 @@
                 document.getElementById('loginFormView').classList.add('hidden');
                 document.getElementById('logoutView').classList.remove('hidden');
             } catch (e) {
-                document.getElementById('userStatus മറ്റൊരു').textContent = 'Session token invalid. Please log in again.';
+                document.getElementById('userStatus').textContent = 'Session token invalid. Please log in again.';
             }
         } else {
             document.getElementById('userStatus').textContent = 'Not logged in.';
@@ -80,7 +83,13 @@
         async function loginUser() {
             const username = document.getElementById('loginUsername').value.trim();
             const password = document.getElementById('loginPassword').value.trim();
-            if (!username || !password) return;
+            const errDiv = document.getElementById('errorMsg');
+            errDiv.textContent = '';
+
+            if (!username || !password) {
+                errDiv.textContent = 'Please enter both username and password.';
+                return;
+            }
 
             try {
                 const res = await fetch(`${API_URL}/login`, {
@@ -88,15 +97,19 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username, password })
                 });
+
                 const data = await res.json();
-                if (data.token) {
+                console.log("Login response:", data);
+
+                if (res.ok && data.token) {
                     localStorage.setItem('token', data.token);
                     window.location.reload();
                 } else {
-                    alert(data.error || 'Login failed');
+                    errDiv.textContent = data.error || data.message || 'Login failed.';
                 }
             } catch (err) {
-                alert('Login request failed.');
+                console.error("Login network error:", err);
+                errDiv.textContent = 'Network error: Could not reach server.';
             }
         }
 
