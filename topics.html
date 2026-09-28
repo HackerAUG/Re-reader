@@ -10,8 +10,9 @@
         .nav-links { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
         .nav-links a { border: 2px solid #000; padding: 8px 12px; text-decoration: none; color: #000; font-weight: bold; background: #eee; }
         .nav-links a:hover { background: #000; color: #fff; }
-        .topic-card { border: 1px solid #000; padding: 10px; margin-bottom: 10px; background: #f9f9f9; cursor: pointer; }
-        .topic-card:hover { background: #eee; }
+        .topic-card { border: 2px solid #000; padding: 12px; margin-bottom: 10px; background: #f9f9f9; cursor: pointer; }
+        .topic-card:hover { background: #000; color: #fff; }
+        .topic-card:hover small { color: #fff; }
         #chatBox { border: 2px solid #000; height: 250px; overflow-y: scroll; padding: 10px; margin-bottom: 10px; background: #f9f9f9; }
         .msg { margin-bottom: 8px; border-bottom: 1px dashed #ccc; padding-bottom: 4px; }
         input, button { font-family: monospace; font-size: 16px; padding: 8px; margin: 5px 0; width: 100%; box-sizing: border-box; border: 2px solid #000; background: #fff; }
@@ -71,6 +72,7 @@
             };
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
+                console.log("WS Message received:", data);
                 if (data.type === 'topics_update') {
                     renderTopics(data.topics);
                 } else if (data.type === 'refresh_feed' && currentSlug) {
@@ -83,20 +85,26 @@
         function renderTopics(topics) {
             const container = document.getElementById('topicsList');
             container.innerHTML = '';
-            if (topics.length === 0) {
+            if (!topics || topics.length === 0) {
                 container.innerHTML = '<p>No topics found.</p>';
                 return;
             }
             topics.forEach(t => {
                 const div = document.createElement('div');
                 div.className = 'topic-card';
-                div.innerHTML = `<h3>${t.title}</h3><p><small>Created by @${t.username}</small></p>`;
-                div.onclick = () => openTopic(t.slug, t.title);
+                div.innerHTML = `<h3>${t.title}</h3><p><small>Created by @${t.username} (Slug: ${t.slug})</small></p>`;
+                
+                // Explicitly bind click listener
+                div.addEventListener('click', () => {
+                    openTopic(t.slug, t.title);
+                });
+                
                 container.appendChild(div);
             });
         }
 
         async function openTopic(slug, title) {
+            console.log("Opening topic slug:", slug);
             currentSlug = slug;
             document.getElementById('activeTopicTitle').textContent = title;
             document.getElementById('topicsListView').classList.add('hidden');
@@ -116,7 +124,7 @@
                 const messages = await res.json();
                 const box = document.getElementById('chatBox');
                 box.innerHTML = '';
-                if (messages.length === 0) {
+                if (!messages || messages.length === 0) {
                     box.innerHTML = '<p>No replies yet. Be the first to write one!</p>';
                     return;
                 }
