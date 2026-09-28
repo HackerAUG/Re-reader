@@ -2,30 +2,31 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Dashboard - Re-reader</title>
+    <title>Dashboard - Unreader</title>
     <style>
         body { font-family: monospace; background: #fff; color: #000; margin: 0; padding: 20px; line-height: 1.4; }
         .container { max-width: 600px; margin: 0 auto; border: 2px solid #000; padding: 20px; }
-        h1 { border-bottom: 2px solid #000; padding-bottom: 5px; margin-top: 0; }
+        h1, h3 { border-bottom: 2px solid #000; padding-bottom: 5px; margin-top: 0; }
         .nav-links { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
         .nav-links a { border: 2px solid #000; padding: 8px 12px; text-decoration: none; color: #000; font-weight: bold; background: #eee; }
         .nav-links a:hover { background: #000; color: #fff; }
         .card { border: 2px solid #000; padding: 15px; margin-bottom: 15px; background: #f9f9f9; }
-        button { font-family: monospace; font-size: 16px; padding: 8px 12px; border: 2px solid #000; background: #000; color: #fff; font-weight: bold; cursor: pointer; }
+        input, button { font-family: monospace; font-size: 16px; padding: 8px; margin: 5px 0; width: 100%; box-sizing: border-box; border: 2px solid #000; background: #fff; }
+        button { background: #000; color: #fff; font-weight: bold; cursor: pointer; }
         button:hover { background: #fff; color: #000; }
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>DASHBOARD</h1>
         
-        <!-- Navigation Links (Mod Panel link is hidden by default) -->
         <div class="nav-links">
             <a href="index.html">Dashboard</a>
             <a href="chat.html">Public Chat</a>
             <a href="topics.html">Topics</a>
             <a href="neighbourhood.html">Neighborhood</a>
-            <a href="mod.html" id="modPanelLink" style="display: none; background: #000; color: #ff0;">Mod Panel</a>
+            <a href="mod.html" id="modPanelLink" class="hidden" style="background: #000; color: #ff0;">Mod Panel</a>
         </div>
 
         <div class="card">
@@ -34,29 +35,74 @@
             <div id="userStatus">Checking login status...</div>
         </div>
 
-        <div class="card" id="authBox">
-            <!-- Login/Logout toggle handled by existing scripts -->
+        <div class="card" id="authSection">
+            <div id="loginFormView">
+                <h3>Login</h3>
+                <input type="text" id="loginUsername" placeholder="Username...">
+                <input type="password" id="loginPassword" placeholder="Password...">
+                <button onclick="loginUser()">Login</button>
+            </div>
+            <div id="logoutView" class="hidden">
+                <button onclick="logoutUser()">Log Out</button>
+            </div>
         </div>
     </div>
 
     <script>
+        const API_URL = "https://re-reader.onrender.com";
         const token = localStorage.getItem('token');
         
         if (token) {
             try {
-                // Decode JWT payload to read user role safely on frontend
                 const payload = JSON.parse(atob(token.split('.')[1]));
-                document.getElementById('userStatus').innerHTML = `Logged in as: <strong>@${payload.username || 'User'}</strong> (${payload.role.toUpperCase()})`;
+                const isAdmin = payload.isAdmin === true || payload.is_admin === true || payload.role === 'admin';
+                const isMod = payload.ismod === true || payload.is_mod === true || payload.role === 'mod';
+                
+                let roleStr = 'User';
+                if (isAdmin) roleStr = 'Administrator';
+                else if (isMod) roleStr = 'Moderator';
 
-                // Show Mod Panel link if user is an admin or mod
-                if (payload.role === 'admin' || payload.role === 'mod') {
-                    document.getElementById('modPanelLink').style.display = 'inline-block';
+                document.getElementById('userStatus').innerHTML = `Logged in as: <strong>@${payload.username || 'User'}</strong> (${roleStr})`;
+
+                if (isAdmin || isMod) {
+                    document.getElementById('modPanelLink').classList.remove('hidden');
                 }
+
+                document.getElementById('loginFormView').classList.add('hidden');
+                document.getElementById('logoutView').classList.remove('hidden');
             } catch (e) {
-                document.getElementById('userStatus').textContent = 'Session token invalid. Please log in again.';
+                document.getElementById('userStatus മറ്റൊരു').textContent = 'Session token invalid. Please log in again.';
             }
         } else {
             document.getElementById('userStatus').textContent = 'Not logged in.';
+        }
+
+        async function loginUser() {
+            const username = document.getElementById('loginUsername').value.trim();
+            const password = document.getElementById('loginPassword').value.trim();
+            if (!username || !password) return;
+
+            try {
+                const res = await fetch(`${API_URL}/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await res.json();
+                if (data.token) {
+                    localStorage.setItem('token', data.token);
+                    window.location.reload();
+                } else {
+                    alert(data.error || 'Login failed');
+                }
+            } catch (err) {
+                alert('Login request failed.');
+            }
+        }
+
+        function logoutUser() {
+            localStorage.removeItem('token');
+            window.location.reload();
         }
     </script>
 </body>
