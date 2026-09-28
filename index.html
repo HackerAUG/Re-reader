@@ -51,7 +51,6 @@
     </div>
 
     <script>
-        // Make sure this matches your exact Render backend URL
         const API_URL = "https://re-reader.onrender.com";
         const token = localStorage.getItem('token');
         
@@ -92,6 +91,7 @@
             }
 
             try {
+                // Change `${API_URL}/login` here to `${API_URL}/api/login` if your backend uses a prefix
                 const res = await fetch(`${API_URL}/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
