@@ -6,7 +6,7 @@
     <style>
         body { font-family: monospace; background: #fff; color: #000; margin: 0; padding: 20px; line-height: 1.4; }
         .container { max-width: 600px; margin: 0 auto; border: 2px solid #000; padding: 20px; }
-        h1, h2 { border-bottom: 2px solid #000; padding-bottom: 5px; margin-top: 0; }
+        h1, h2, h3, h4 { border-bottom: 2px solid #000; padding-bottom: 5px; margin-top: 0; }
         .nav-links { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
         .nav-links a { border: 2px solid #000; padding: 8px 12px; text-decoration: none; color: #000; font-weight: bold; background: #eee; }
         .nav-links a:hover { background: #000; color: #fff; }
@@ -15,6 +15,7 @@
         button { background: #000; color: #fff; font-weight: bold; cursor: pointer; }
         button:hover { background: #fff; color: #000; }
         .admin-only { background: #eef; }
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
@@ -27,13 +28,13 @@
             <a href="neighbourhood.html">Neighborhood</a>
         </div>
 
-        <div id="unauthorizedMsg" style="display:none;">
+        <div id="unauthorizedMsg" class="hidden">
             <h3>Access Denied</h3>
             <p>You must be a Moderator or Administrator to view this panel.</p>
         </div>
 
-        <div id="modContent" style="display:none;">
-            <p>Logged in as: <strong id="userRoleBadge"></strong></p>
+        <div id="modContent" class="hidden">
+            <p>Logged in as: <strong id="userRoleBadge">USER</strong></p>
 
             <!-- Moderator Controls: Delete & Timeout -->
             <div class="section">
@@ -46,7 +47,7 @@
             </div>
 
             <!-- Admin Only Controls: IP Logs & Bans -->
-            <div id="adminSection" class="section admin-only" style="display:none;">
+            <div id="adminSection" class="section admin-only hidden">
                 <h3>Administrator Controls</h3>
                 <input type="text" id="targetUserBan" placeholder="Username to BAN IP">
                 <button onclick="banUser()" style="background: #a00;">Permanently Ban User & Log IP</button>
@@ -63,22 +64,32 @@
         const WS_URL = "wss://re-reader.onrender.com";
         const token = localStorage.getItem('token');
 
-        let userRole = '';
-        try {
-            const payload = JSON.parse(atob(token.split('.')[1]));
-            userRole = payload.role; // 'admin', 'mod', or 'user'
-        } catch(e) {
-            userRole = '';
+        let isAdmin = false;
+        let isMod = false;
+
+        if (token) {
+            try {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                console.log("Token payload:", payload);
+                
+                // Read boolean database flags safely with fallbacks
+                isAdmin = payload.isAdmin === true || payload.is_admin === true || payload.role === 'admin';
+                isMod = payload.ismod === true || payload.is_mod === true || payload.role === 'mod';
+            } catch(e) {
+                console.error("Token parse error", e);
+            }
         }
 
-        if (userRole === 'admin' || userRole === 'mod') {
-            document.getElementById('modContent').style.display = 'block';
-            document.getElementById('userRoleBadge').textContent = userRole.toUpperCase();
-            if (userRole === 'admin') {
-                document.getElementById('adminSection').style.display = 'block';
+        if (isAdmin || isMod) {
+            document.getElementById('modContent').classList.remove('hidden');
+            if (isAdmin) {
+                document.getElementById('userRoleBadge').textContent = 'ADMINISTRATOR';
+                document.getElementById('adminSection').classList.remove('hidden');
+            } else {
+                document.getElementById('userRoleBadge').textContent = 'MODERATOR';
             }
         } else {
-            document.getElementById('unauthorizedMsg').style.display = 'block';
+            document.getElementById('unauthorizedMsg').classList.remove('hidden');
         }
 
         let ws = new WebSocket(WS_URL);
@@ -99,7 +110,7 @@
         }
 
         function banUser() {
-            if (userRole !== 'admin') { alert('Admins only!'); return; }
+            if (!isAdmin) { alert('Admins only!'); return; }
             const username = document.getElementById('targetUserBan').value.trim();
             if (!username) return;
             ws.send(JSON.stringify({ type: 'mod_action', action: 'ban', target_user: username }));
@@ -107,7 +118,7 @@
         }
 
         async function fetchIpLogs() {
-            if (userRole !== 'admin') return;
+            if (!isAdmin) return;
             try {
                 const res = await fetch(`${API_URL}/admin/iplogs`, {
                     headers: { 'Authorization': `Bearer ${token}` }
@@ -115,6 +126,10 @@
                 const logs = await res.json();
                 const container = document.getElementById('ipLogsList');
                 container.innerHTML = '';
+                if (!logs || logs.length === 0) {
+                    container.innerHTML = 'No IP logs found.';
+                    return;
+                }
                 logs.forEach(l => {
                     const d = document.createElement('div');
                     d.textContent = `@${l.username} - IP: ${l.ip_address} (${new Date(l.logged_at).toLocaleString()})`;
