@@ -2,17 +2,22 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Topics - Re-reader</title>
+    <title>Topics - Unreader</title>
     <style>
         body { font-family: monospace; background: #fff; color: #000; margin: 0; padding: 20px; line-height: 1.4; }
         .container { max-width: 600px; margin: 0 auto; border: 2px solid #000; padding: 20px; }
-        h1 { border-bottom: 2px solid #000; padding-bottom: 5px; margin-top: 0; }
+        h1, h2 { border-bottom: 2px solid #000; padding-bottom: 5px; margin-top: 0; }
         .nav-links { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
         .nav-links a { border: 2px solid #000; padding: 8px 12px; text-decoration: none; color: #000; font-weight: bold; background: #eee; }
         .nav-links a:hover { background: #000; color: #fff; }
-        .topic-card { border: 1px solid #000; padding: 10px; margin-bottom: 10px; background: #f9f9f9; }
+        .topic-card { border: 1px solid #000; padding: 10px; margin-bottom: 10px; background: #f9f9f9; cursor: pointer; }
+        .topic-card:hover { background: #eee; }
+        #chatBox { border: 2px solid #000; height: 250px; overflow-y: scroll; padding: 10px; margin-bottom: 10px; background: #f9f9f9; }
+        .msg { margin-bottom: 8px; border-bottom: 1px dashed #ccc; padding-bottom: 4px; }
         input, button { font-family: monospace; font-size: 16px; padding: 8px; margin: 5px 0; width: 100%; box-sizing: border-box; border: 2px solid #000; background: #fff; }
         button { background: #000; color: #fff; font-weight: bold; cursor: pointer; }
+        button:hover { background: #fff; color: #000; }
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
@@ -25,16 +30,30 @@
             <a href="neighbourhood.html">Neighborhood</a>
         </div>
 
-        <div style="border: 2px solid #000; padding: 10px; margin-bottom: 15px;">
-            <h3>Create New Topic</h3>
-            <input type="text" id="topicTitle" placeholder="Topic Title...">
-            <button onclick="createTopic()">Publish Topic</button>
+        <!-- Topics List View -->
+        <div id="topicsListView">
+            <div style="border: 2px solid #000; padding: 10px; margin-bottom: 15px;">
+                <h3>Create New Topic</h3>
+                <input type="text" id="topicTitle" placeholder="Topic Title...">
+                <button onclick="createTopic()">Publish Topic</button>
+            </div>
+            <div id="topicsList">Loading topics...</div>
         </div>
 
-        <div id="topicsList">Loading topics...</div>
+        <!-- Individual Topic View -->
+        <div id="topicDetailView" class="hidden">
+            <button onclick="backToTopics()" style="width: auto; padding: 4px 8px; margin-bottom: 10px;">&larr; Back to Topics</button>
+            <h2 id="activeTopicTitle">Topic</h2>
+            <div id="chatBox">Loading discussion...</div>
+            <div style="display: flex; gap: 5px;">
+                <input type="text" id="topicMsgInput" placeholder="Write a reply..." onkeydown="if(event.key==='Enter') sendTopicMsg()" style="margin:0; width: 75%;">
+                <button onclick="sendTopicMsg()" style="margin:0; width: 22%;">Reply</button>
+            </div>
+        </div>
     </div>
 
     <script>
+        const API_URL = "https://re-reader.onrender.com";
         const WS_URL = "wss://re-reader.onrender.com";
         const token = localStorage.getItem('token');
         if (!token) {
@@ -43,6 +62,7 @@
         }
 
         let ws;
+        let currentSlug = null;
 
         function initWebSocket() {
             ws = new WebSocket(WS_URL);
@@ -53,6 +73,8 @@
                 const data = JSON.parse(event.data);
                 if (data.type === 'topics_update') {
                     renderTopics(data.topics);
+                } else if (data.type === 'refresh_feed' && currentSlug) {
+                    loadTopicHistory(currentSlug);
                 }
             };
             ws.onclose = () => { setTimeout(initWebSocket, 3000); };
@@ -69,8 +91,55 @@
                 const div = document.createElement('div');
                 div.className = 'topic-card';
                 div.innerHTML = `<h3>${t.title}</h3><p><small>Created by @${t.username}</small></p>`;
+                div.onclick = () => openTopic(t.slug, t.title);
                 container.appendChild(div);
             });
+        }
+
+        async function openTopic(slug, title) {
+            currentSlug = slug;
+            document.getElementById('activeTopicTitle').textContent = title;
+            document.getElementById('topicsListView').classList.add('hidden');
+            document.getElementById('topicDetailView').classList.remove('hidden');
+
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'switch_context', mode: 'topic', target: slug }));
+            }
+            loadTopicHistory(slug);
+        }
+
+        async function loadTopicHistory(slug) {
+            try {
+                const res = await fetch(`${API_URL}/topic-history?slug=${slug}&index=0`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const messages = await res.json();
+                const box = document.getElementById('chatBox');
+                box.innerHTML = '';
+                if (messages.length === 0) {
+                    box.innerHTML = '<p>No replies yet. Be the first to write one!</p>';
+                    return;
+                }
+                messages.forEach(m => {
+                    if (m.is_deleted) return;
+                    const div = document.createElement('div');
+                    div.className = 'msg';
+                    div.innerHTML = `<strong>@${m.username}:</strong> ${m.content}`;
+                    box.appendChild(div);
+                });
+                box.scrollTop = box.scrollHeight;
+            } catch (err) {
+                document.getElementById('chatBox').innerHTML = 'Failed to load topic history.';
+            }
+        }
+
+        function backToTopics() {
+            currentSlug = null;
+            document.getElementById('topicDetailView').classList.add('hidden');
+            document.getElementById('topicsListView').classList.remove('hidden');
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'switch_context', mode: 'public', target: '' }));
+            }
         }
 
         function createTopic() {
@@ -82,6 +151,18 @@
                 titleInput.value = '';
             } else {
                 alert('WebSocket connection offline.');
+            }
+        }
+
+        function sendTopicMsg() {
+            const input = document.getElementById('topicMsgInput');
+            const content = input.value.trim();
+            if (!content || !currentSlug) return;
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'topic_message', target: currentSlug, content: content }));
+                input.value = '';
+            } else {
+                alert('WebSocket disconnected.');
             }
         }
 
