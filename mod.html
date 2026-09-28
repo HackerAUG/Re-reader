@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Moderation Panel - Unreader</title>
+    <style>
+        body { font-family: monospace; background: #fff; color: #000; margin: 0; padding: 20px; line-height: 1.4; }
+        .container { max-width: 600px; margin: 0 auto; border: 2px solid #000; padding: 20px; }
+        h1, h2 { border-bottom: 2px solid #000; padding-bottom: 5px; margin-top: 0; }
+        .nav-links { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .nav-links a { border: 2px solid #000; padding: 8px 12px; text-decoration: none; color: #000; font-weight: bold; background: #eee; }
+        .nav-links a:hover { background: #000; color: #fff; }
+        .section { border: 2px solid #000; padding: 12px; margin-bottom: 15px; background: #f9f9f9; }
+        input, button { font-family: monospace; font-size: 16px; padding: 8px; margin: 5px 0; width: 100%; box-sizing: border-box; border: 2px solid #000; background: #fff; }
+        button { background: #000; color: #fff; font-weight: bold; cursor: pointer; }
+        button:hover { background: #fff; color: #000; }
+        .admin-only { background: #eef; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>MODERATION PANEL</h1>
+        <div class="nav-links">
+            <a href="index.html">Dashboard</a>
+            <a href="chat.html">Public Chat</a>
+            <a href="topics.html">Topics</a>
+            <a href="neighbourhood.html">Neighborhood</a>
+        </div>
+
+        <div id="unauthorizedMsg" style="display:none;">
+            <h3>Access Denied</h3>
+            <p>You must be a Moderator or Administrator to view this panel.</p>
+        </div>
+
+        <div id="modContent" style="display:none;">
+            <p>Logged in as: <strong id="userRoleBadge"></strong></p>
+
+            <!-- Moderator Controls: Delete & Timeout -->
+            <div class="section">
+                <h3>Message / User Actions (Mods & Admins)</h3>
+                <input type="text" id="targetMsgId" placeholder="Message ID to Delete">
+                <button onclick="deleteMessage()">Delete Message</button>
+                <br><br>
+                <input type="text" id="targetUserTimeout" placeholder="Username to Time Out">
+                <button onclick="timeoutUser()">Time Out User (10m)</button>
+            </div>
+
+            <!-- Admin Only Controls: IP Logs & Bans -->
+            <div id="adminSection" class="section admin-only" style="display:none;">
+                <h3>Administrator Controls</h3>
+                <input type="text" id="targetUserBan" placeholder="Username to BAN IP">
+                <button onclick="banUser()" style="background: #a00;">Permanently Ban User & Log IP</button>
+                
+                <h4>Logged User IPs</h4>
+                <button onclick="fetchIpLogs()">Refresh IP Logs</button>
+                <div id="ipLogsList" style="margin-top: 10px; font-size: 14px;">Click refresh to view logs.</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = "https://re-reader.onrender.com";
+        const WS_URL = "wss://re-reader.onrender.com";
+        const token = localStorage.getItem('token');
+
+        let userRole = '';
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            userRole = payload.role; // 'admin', 'mod', or 'user'
+        } catch(e) {
+            userRole = '';
+        }
+
+        if (userRole === 'admin' || userRole === 'mod') {
+            document.getElementById('modContent').style.display = 'block';
+            document.getElementById('userRoleBadge').textContent = userRole.toUpperCase();
+            if (userRole === 'admin') {
+                document.getElementById('adminSection').style.display = 'block';
+            }
+        } else {
+            document.getElementById('unauthorizedMsg').style.display = 'block';
+        }
+
+        let ws = new WebSocket(WS_URL);
+        ws.onopen = () => ws.send(JSON.stringify({ type: 'auth', token: token }));
+
+        function deleteMessage() {
+            const msgId = document.getElementById('targetMsgId').value.trim();
+            if (!msgId) return;
+            ws.send(JSON.stringify({ type: 'mod_action', action: 'delete', target_id: msgId }));
+            alert('Delete request sent.');
+        }
+
+        function timeoutUser() {
+            const username = document.getElementById('targetUserTimeout').value.trim();
+            if (!username) return;
+            ws.send(JSON.stringify({ type: 'mod_action', action: 'timeout', target_user: username }));
+            alert('Timeout request sent.');
+        }
+
+        function banUser() {
+            if (userRole !== 'admin') { alert('Admins only!'); return; }
+            const username = document.getElementById('targetUserBan').value.trim();
+            if (!username) return;
+            ws.send(JSON.stringify({ type: 'mod_action', action: 'ban', target_user: username }));
+            alert('Ban & IP log action dispatched.');
+        }
+
+        async function fetchIpLogs() {
+            if (userRole !== 'admin') return;
+            try {
+                const res = await fetch(`${API_URL}/admin/iplogs`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const logs = await res.json();
+                const container = document.getElementById('ipLogsList');
+                container.innerHTML = '';
+                logs.forEach(l => {
+                    const d = document.createElement('div');
+                    d.textContent = `@${l.username} - IP: ${l.ip_address} (${new Date(l.logged_at).toLocaleString()})`;
+                    container.appendChild(d);
+                });
+            } catch(err) {
+                document.getElementById('ipLogsList').textContent = 'Failed to load IP logs.';
+            }
+        }
+    </script>
+</body>
+</html>
