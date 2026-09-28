@@ -1,13 +1,20 @@
 {
   "name": "kindle-eink-chat",
   "version": "1.0.0",
-  "description": "E-ink optimized multi-page social app for low-JS browsers with Neon DB",
-  "main": "server.js",
+  "description": "E-ink optimized multi-page social app for low-JS browsers",
+  "main": "index.js",
+  "type": "module",
   "scripts": {
-    "start": "node server.js"
+    "start": "node index.js"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",
-    "express": "^4.19.2"
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.11.3",
+    "sanitize-html": "^2.13.0",
+    "ws": "^8.16.0"
   }
 }
